@@ -1,4 +1,3 @@
-'''
 # 📱 全能系统管家 (AIO-KSU-Toolbox)
 
 这是一个基于 KernelSU / APatch WebUI 机制打造的 **All-In-One (AIO) 极客聚合模块**。
@@ -38,10 +37,11 @@
 ---
 
 ### 目录结构
+
+```text
 A-gemini/
-[span_0](start_span)├── module.prop         # 模块基本信息[span_0](end_span)
+├── module.prop         # 模块基本信息
 ├── service.sh          # 开机守护脚本 (含 Gemini 修复等后台任务)
 ├── README.md           # 你现在看到的这个文档
 └── webroot/
     └── index.html      # AIO 可视化控制台核心代码
-'''
