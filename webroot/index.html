@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>全能系统管家 V11</title>
+    <title>全能系统管家 V12</title>
     <style>
         :root { --bg: #f5f5f7; --card-bg: #ffffff; --text-main: #000000; --text-sub: #8e8e93; --accent: #007aff; --border-color: #f2f2f7; --shadow: 0 8px 24px rgba(0,0,0,0.04); }
         @media (prefers-color-scheme: dark) { :root { --bg: #000000; --card-bg: #1c1c1e; --text-main: #f5f5f5; --text-sub: #98989d; --border-color: #2c2c2e; --shadow: 0 8px 24px rgba(0,0,0,0.4); } }
@@ -62,8 +62,30 @@
 
 <div class="header">
     <h2>📱 全能管家</h2>
-    <span class="version-tag">V11 里程碑版</span>
+    <span class="version-tag">V12 终极版</span>
 </div>
+
+<details class="miuix-card" id="card-redirect" ontoggle="handleToggle(event, 'redirect')">
+    <summary>
+        <div class="summary-left">
+            <div class="mod-title">📦 模块自动归档日志</div>
+            <div class="mod-desc">监控 QQ/微信/TG 等下载路径，自动识别并整理模块 ZIP。</div>
+        </div>
+        <div class="summary-right">
+            <div id="redirect-badge" class="status-badge status-idle">后台监控中</div>
+            <div class="chevron"></div>
+        </div>
+    </summary>
+    <div class="card-body">
+        <div id="redirect-log-box" class="inner-list" style="background: rgba(142,142,147,0.05); border-radius: 12px; padding: 12px; max-height: 200px; font-size: 12px; line-height: 1.6;">
+            正在读取最近归档记录...
+        </div>
+        <div class="actions">
+            <button class="btn-main" onclick="fetchRedirectLogs()">🔄 刷新日志</button>
+            <button class="btn-main btn-danger" onclick="clearRedirectLogs()">🗑️ 清空记录</button>
+        </div>
+    </div>
+</details>
 
 <details class="miuix-card" id="card-updater" ontoggle="handleToggle(event, 'updater')">
     <summary>
@@ -212,7 +234,8 @@
     }
 
     const MY_MOD_DIR = '/data/adb/modules/A-gemini/';
-    let loadState = { updater: false, dexopt: false, modules: false, keybox: false };
+    // 【V12 新增】追加 redirect 状态
+    let loadState = { updater: false, dexopt: false, modules: false, keybox: false, redirect: false };
     let updaterIsFrozen = false, isCompiling = false, allModules = [], isDesc = false;
 
     function handleToggle(event, cardName) {
@@ -231,9 +254,53 @@
                 document.getElementById('kb-badge').className = 'status-badge status-working';
                 document.getElementById('kb-badge').innerText = '读取中';
                 kb_checkStatus();
+            } else if (cardName === 'redirect') {
+                // 【V12 新增】处理归档日志卡片展开
+                document.getElementById('redirect-badge').className = 'status-badge status-working';
+                document.getElementById('redirect-badge').innerText = '读取中';
+                fetchRedirectLogs();
             }
         }
     }
+
+    // === 【V12 新增】模块归档日志核心逻辑 ===
+    async function fetchRedirectLogs() {
+        try {
+            const logPath = MY_MOD_DIR + 'move_log.txt';
+            // 安全读取 Base64，兼容不同的 Android 底层环境，剥离换行符
+            const res = await ksu.exec(`[ -f "${logPath}" ] && (base64 -w 0 "${logPath}" 2>/dev/null || base64 "${logPath}" | tr -d '\\n') || echo ""`);
+            let b64str = (typeof res === 'string') ? res : String(res.stdout || "");
+            
+            const logBox = document.getElementById('redirect-log-box');
+            const badge = document.getElementById('redirect-badge');
+
+            if (b64str.trim() === "") {
+                logBox.innerHTML = "<div style='text-align:center; padding:10px;'>暂无归档记录，您可以前往下载一个 ZIP 模块试试。</div>";
+                badge.className = "status-badge status-idle";
+                badge.innerText = "监控中";
+            } else {
+                const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str.trim()), c => c.charCodeAt(0)));
+                // 将日志行倒序排列，让最新的操作显示在最顶端
+                const lines = raw.trim().split('\n').filter(line => line.trim() !== "").reverse();
+                logBox.innerHTML = lines.map(line => `<div>${line}</div>`).join('');
+                badge.className = "status-badge status-success";
+                badge.innerText = "有新归档";
+            }
+            loadState.redirect = true;
+        } catch (e) { 
+            console.error(e); 
+            document.getElementById('redirect-log-box').innerHTML = `<div style="color:#ff3b30; text-align:center; padding:10px;">读取失败: ${e.message || '未知错误'}</div>`;
+        }
+    }
+
+    async function clearRedirectLogs() {
+        if (navigator.vibrate) navigator.vibrate(50);
+        const logPath = MY_MOD_DIR + 'move_log.txt';
+        await ksu.exec(`rm -f ${logPath}`);
+        showToast("🗑️ 日志记录已清空");
+        fetchRedirectLogs();
+    }
+    // ==========================================
 
     async function checkUpdaterStatus() {
         try {
@@ -411,7 +478,6 @@
             `echo '===DONE===' > ${FLAG_FILE}`
         ];
         
-        // 关键修复：更换为 safeBtoa
         await ksu.exec(`echo "${safeBtoa(compileSh.join('\n'))}" | base64 -d > /data/local/tmp/aio_compile.sh && nohup sh /data/local/tmp/aio_compile.sh > /dev/null 2>&1 &`);
 
         let pollTimer = setInterval(async () => {
@@ -627,7 +693,6 @@
             echo "STATUS:DONE|🎉 Keybox 注入成功！" > $STATUS_FILE
         `;
 
-        // 关键修复：更换为 safeBtoa
         await ksu.exec(`echo "${safeBtoa(shellLogic)}" | base64 -d > /data/local/tmp/run_kb.sh && nohup sh /data/local/tmp/run_kb.sh >/dev/null 2>&1 &`);
 
         let percent = 10;
