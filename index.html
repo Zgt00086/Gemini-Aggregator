@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全能系统管家 V11</title>
+    <style>
+        :root { --bg: #f5f5f7; --card-bg: #ffffff; --text-main: #000000; --text-sub: #8e8e93; --accent: #007aff; --border-color: #f2f2f7; --shadow: 0 8px 24px rgba(0,0,0,0.04); }
+        @media (prefers-color-scheme: dark) { :root { --bg: #000000; --card-bg: #1c1c1e; --text-main: #f5f5f5; --text-sub: #98989d; --border-color: #2c2c2e; --shadow: 0 8px 24px rgba(0,0,0,0.4); } }
+        body { font-family: -apple-system, BlinkMacSystemFont, "MiSans", sans-serif; background: var(--bg); margin: 0; padding: 16px; color: var(--text-main); transition: background 0.3s; padding-bottom: 40px; }
+        .header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+        h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+        .version-tag { font-size: 13px; background: rgba(142, 142, 147, 0.15); padding: 5px 10px; border-radius: 12px; font-weight: 600; color: var(--text-sub); }
+        #error-log { color: #ff3b30; background: rgba(255, 59, 48, 0.1); padding: 12px; border-radius: 16px; margin-bottom: 16px; display: none; font-size: 13px; font-weight: 600; word-break: break-all; }
+        #toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(30, 30, 30, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #ffffff; padding: 14px 24px; border-radius: 20px; font-size: 15px; font-weight: 600; opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); z-index: 9999; text-align: center; white-space: nowrap; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); }
+        .toast-show { opacity: 1 !important; transform: translateX(-50%) translateY(0) !important; }
+        details.miuix-card { background: var(--card-bg); border-radius: 20px; margin-bottom: 16px; box-shadow: var(--shadow); overflow: hidden; transition: all 0.3s; border: 1px solid var(--border-color); }
+        details.miuix-card summary { padding: 18px; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; outline: none; user-select: none; }
+        details.miuix-card summary::-webkit-details-marker { display: none; }
+        .summary-left { display: flex; flex-direction: column; gap: 4px; flex: 1; padding-right: 12px; }
+        .mod-title { font-size: 17px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px;}
+        .mod-desc { font-size: 13px; color: var(--text-sub); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .summary-right { display: flex; align-items: center; gap: 10px; }
+        .chevron { width: 12px; height: 12px; border-right: 2px solid var(--text-sub); border-bottom: 2px solid var(--text-sub); transform: rotate(45deg); transition: transform 0.3s ease; }
+        details[open] .chevron { transform: rotate(-135deg); }
+        .card-body { padding: 0 18px 18px 18px; border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 16px; }
+        .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: white; transition: 0.3s; white-space: nowrap; }
+        .status-idle { background: rgba(142, 142, 147, 0.2); color: var(--text-sub); box-shadow: none; }
+        .status-success { background: #34c759; box-shadow: 0 2px 8px rgba(52,199,89,0.3); }
+        .status-disabled { background: #ff3b30; box-shadow: 0 2px 8px rgba(255,59,48,0.3); }
+        .status-working { background: #ff9500; box-shadow: 0 2px 8px rgba(255,149,0,0.3); animation: pulse 1.5s infinite; }
+        .actions { display: flex; gap: 10px; margin-top: 16px; }
+        .btn-main { flex: 1; background: rgba(0, 122, 255, 0.1); color: var(--accent); border: none; padding: 12px; border-radius: 14px; font-size: 15px; font-weight: 600; transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1); cursor: pointer; }
+        .btn-main:active { transform: scale(0.95); background: rgba(0, 122, 255, 0.2); }
+        .btn-main:disabled { opacity: 0.6; pointer-events: none; }
+        .btn-danger { background: rgba(255, 59, 48, 0.1); color: #ff3b30; }
+        .btn-danger:active { background: rgba(255, 59, 48, 0.2); }
+        .stats-grid { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 500; }
+        .stats-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(142, 142, 147, 0.05); border-radius: 10px; }
+        .stats-val { font-weight: 700; font-size: 15px; }
+        details.inner-card { background: rgba(142, 142, 147, 0.05); border-radius: 10px; margin-top: -4px; margin-bottom: 8px; font-size: 13px; }
+        details.inner-card summary { padding: 10px 12px; cursor: pointer; font-weight: 600; color: var(--text-sub); outline: none; display: block; }
+        .inner-list { padding: 0 12px 12px; max-height: 220px; overflow-y: auto; font-family: monospace; color: var(--text-sub); }
+        .inner-list div { padding: 4px 0; border-bottom: 1px dashed rgba(142,142,147,0.2); word-break: break-all; }
+        .inner-list div:last-child { border-bottom: none; }
+        .scroll-container { max-height: 380px; overflow-y: auto; padding-right: 4px; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(142, 142, 147, 0.3); border-radius: 4px; }
+        .section-title { font-size: 14px; font-weight: 600; color: var(--text-sub); margin: 32px 0 12px 8px; text-transform: uppercase; letter-spacing: 1px; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .progress-container { width: 100%; height: 8px; background: rgba(142, 142, 147, 0.2); border-radius: 4px; overflow: hidden; margin-top: 16px; display: none; }
+        .progress-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.5s ease; border-radius: 4px; position: relative; }
+        .progress-bar-fill::after { content: ""; position: absolute; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%); animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .progress-text { font-size: 13px; color: var(--text-sub); margin-top: 8px; text-align: center; display: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+<div id="error-log"></div>
+<div id="toast">操作成功</div>
+
+<div class="header">
+    <h2>📱 全能管家</h2>
+    <span class="version-tag">V11 里程碑版</span>
+</div>
+
+<details class="miuix-card" id="card-updater" ontoggle="handleToggle(event, 'updater')">
+    <summary>
+        <div class="summary-left">
+            <div class="mod-title">🛡️ 系统更新屏蔽器</div>
+            <div class="mod-desc">物理隐藏更新组件，彻底断绝夜间强行升级的可能。</div>
+        </div>
+        <div class="summary-right">
+            <div id="updater-badge" class="status-badge status-idle">待唤醒</div>
+            <div class="chevron"></div>
+        </div>
+    </summary>
+    <div class="card-body">
+        <div id="updater-persist-desc" style="font-size: 13px; margin-bottom: 12px; line-height: 1.6; background: rgba(142,142,147,0.08); padding: 12px; border-radius: 12px;">
+            正在获取底层持久化状态...
+        </div>
+        <div class="actions">
+            <button class="btn-main btn-danger" onclick="toggleUpdater()" id="updater-btn" disabled>等待加载...</button>
+        </div>
+    </div>
+</details>
+
+<details class="miuix-card" id="card-dexopt" ontoggle="handleToggle(event, 'dexopt')">
+    <summary>
+        <div class="summary-left">
+            <div class="mod-title">⚡ Smart DexOpt 引擎</div>
+            <div class="mod-desc" id="dexopt-brief">采用 Base64 封包传输，完美读取 100% 数据。</div>
+        </div>
+        <div class="summary-right">
+            <div id="dexopt-badge" class="status-badge status-idle">待扫描</div>
+            <div class="chevron"></div>
+        </div>
+    </summary>
+    <div class="card-body">
+        <div id="dexopt-stats" class="stats-grid">
+            <div style="text-align:center; padding: 20px; color: var(--text-sub);">点击即可触发原生引擎排查...</div>
+        </div>
+        <div id="dexopt-progress-box" style="display: none; margin-top: 12px; margin-bottom: 4px;">
+            <div class="progress-container" style="display: block;">
+                <div id="dexopt-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+            <div id="dexopt-progress-text" class="progress-text" style="display: block;">准备启动编译引擎...</div>
+        </div>
+        <div class="actions">
+            <button class="btn-main btn-danger" onclick="triggerDexopt()" id="dexopt-btn" disabled>等待数据加载...</button>
+        </div>
+    </div>
+</details>
+
+<details class="miuix-card" id="card-modules" ontoggle="handleToggle(event, 'modules')">
+    <summary>
+        <div class="summary-left">
+            <div class="mod-title">🧩 KSU 模块跳转中心</div>
+            <div class="mod-desc" id="module-brief">管理你安装的各种模块，一键直达 MT 目录。</div>
+        </div>
+        <div class="summary-right">
+            <div id="module-badge" class="status-badge status-idle">待读取</div>
+            <div class="chevron"></div>
+        </div>
+    </summary>
+    <div class="card-body">
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <select id="selSort" onchange="renderList()" style="flex:1; padding: 10px; border-radius: 12px; border: none; background: rgba(142,142,147,0.1); color: var(--text-main); outline:none;">
+                <option value="name">按字母排序</option>
+                <option value="time">按安装时间</option>
+            </select>
+            <button onclick="toggleOrder()" id="btnOrder" style="flex:1; padding: 10px; border-radius: 12px; border: none; background: rgba(142,142,147,0.1); font-weight:600; color: var(--text-main);">正序 ↓</button>
+        </div>
+        <div class="scroll-container" id="app-modules">
+            <div style="text-align:center; padding: 20px; color: var(--text-sub);">正在准备读取模块列表...</div>
+        </div>
+    </div>
+</details>
+
+<details class="miuix-card" id="card-keybox" ontoggle="handleToggle(event, 'keybox')">
+    <summary>
+        <div class="summary-left">
+            <div class="mod-title">🔑 Tricky Keybox 更新器</div>
+            <div class="mod-desc">多层解码引擎，一键注入最新的系统破解级密钥。</div>
+        </div>
+        <div class="summary-right">
+            <div id="kb-badge" class="status-badge status-idle">待检测</div>
+            <div class="chevron"></div>
+        </div>
+    </summary>
+    <div class="card-body">
+        <div id="kb-status-desc" style="font-size: 13px; margin-bottom: 12px; line-height: 1.6; background: rgba(142,142,147,0.08); padding: 12px; border-radius: 12px; font-family: monospace;">
+            正在读取本地 TrickyStore 状态...
+        </div>
+        
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <select id="kb-source-sel" style="flex:1; padding: 12px; border-radius: 14px; border: none; background: rgba(142,142,147,0.1); color: var(--text-main); font-weight: 600; outline:none; font-size: 14px;">
+                <option value="1">📡 Yurikey 源 (标准解码)</option>
+                <option value="2">📡 Tricky-Addon 源 (Hex+B64)</option>
+                <option value="3" selected>📡 IntegrityBox 源 (十层重度伪装)</option>
+            </select>
+        </div>
+
+        <div id="kb-progress-box" style="display: none; margin-bottom: 12px;">
+            <div class="progress-container" style="display: block;">
+                <div id="kb-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+            <div id="kb-progress-text" class="progress-text" style="display: block; color: var(--accent);">引擎启动中...</div>
+        </div>
+
+        <div class="actions">
+            <button class="btn-main" onclick="kb_triggerUpdate()" id="kb-btn" disabled>抓取并注入 Keybox</button>
+        </div>
+    </div>
+</details>
+
+<div class="section-title">👻 后台静默守护 (默认开启)</div>
+<div style="background: var(--card-bg); border-radius: 20px; padding: 16px; box-shadow: var(--shadow); border: 1px solid var(--border-color); margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="flex: 1; padding-right: 10px;">
+            <div style="font-size: 16px; font-weight: 600; color: var(--text-main); margin-bottom: 4px;">Gemini 唤醒修复引擎</div>
+            <div style="font-size: 12px; color: var(--text-sub); line-height: 1.4;">
+                每次开机后自动重置 Google Assistant 绑定，解决有震动无界面 Bug。
+            </div>
+        </div>
+        <div class="status-badge status-success" style="box-shadow: none; flex-shrink: 0;">已在后台运作</div>
+    </div>
+</div>
+
+<script>
+    // 【核心修复】全局捕获所有的常规错误和未处理的 Promise（异步）错误
+    window.onerror = function(msg, url, line) {
+        document.getElementById('error-log').style.display = 'block';
+        document.getElementById('error-log').innerHTML += `🚨 同步异常: ${msg} (行 ${line})<br>`;
+    };
+    window.onunhandledrejection = function(event) {
+        document.getElementById('error-log').style.display = 'block';
+        document.getElementById('error-log').innerHTML += `🚨 异步阻断: ${event.reason}<br>`;
+    };
+
+    function showToast(message) {
+        const toast = document.getElementById('toast');
+        toast.innerHTML = message;
+        toast.classList.add('toast-show');
+        setTimeout(() => { toast.classList.remove('toast-show'); }, 3000);
+    }
+
+    // 【核心修复】使用支持 UTF-8 的安全 Base64 转码函数，彻底解决中文脚本导致的崩溃
+    function safeBtoa(str) {
+        return window.btoa(unescape(encodeURIComponent(str)));
+    }
+
+    const MY_MOD_DIR = '/data/adb/modules/A-gemini/';
+    let loadState = { updater: false, dexopt: false, modules: false, keybox: false };
+    let updaterIsFrozen = false, isCompiling = false, allModules = [], isDesc = false;
+
+    function handleToggle(event, cardName) {
+        if (event.target.open && !loadState[cardName]) {
+            if (cardName === 'updater') {
+                document.getElementById('updater-badge').className = 'status-badge status-working';
+                document.getElementById('updater-badge').innerText = '获取中';
+                checkUpdaterStatus();
+            } else if (cardName === 'dexopt') {
+                fetchDexoptStats();
+            } else if (cardName === 'modules') {
+                document.getElementById('module-badge').className = 'status-badge status-working';
+                document.getElementById('module-badge').innerText = '读取中';
+                loadModules();
+            } else if (cardName === 'keybox') {
+                document.getElementById('kb-badge').className = 'status-badge status-working';
+                document.getElementById('kb-badge').innerText = '读取中';
+                kb_checkStatus();
+            }
+        }
+    }
+
+    async function checkUpdaterStatus() {
+        try {
+            const res = await ksu.exec(`[ -f "${MY_MOD_DIR}/system/product/app/Updater/Updater.apk" ] && echo 1 || echo 0`);
+            updaterIsFrozen = String(res.stdout || res).trim() === '1';
+            
+            document.getElementById('updater-badge').className = updaterIsFrozen ? 'status-badge status-success' : 'status-badge status-disabled';
+            document.getElementById('updater-badge').innerText = updaterIsFrozen ? '已冻结 ❄️' : '未防护 ⚠️';
+            
+            const btn = document.getElementById('updater-btn');
+            btn.innerText = updaterIsFrozen ? '✅ 解除屏蔽 (恢复系统更新)' : '🛡️ 立即锁定系统更新';
+            btn.className = updaterIsFrozen ? 'btn-main' : 'btn-main btn-danger';
+            btn.disabled = false;
+            
+            const persistDesc = document.getElementById('updater-persist-desc');
+            if (updaterIsFrozen) {
+                persistDesc.innerHTML = "🔒 <b>物理挂载已锁定</b>：系统更新组件已物理失效。<br>👉 <b>下次开机：依然保持【已冻结】状态。</b>";
+                persistDesc.style.color = "#34c759";
+            } else {
+                persistDesc.innerHTML = "⚠️ <b>处于未防护状态</b>：系统可能随时在夜间静默升级。<br>👉 <b>下次开机：依然保持【未防护】状态。</b>";
+                persistDesc.style.color = "#ff3b30";
+            }
+            loadState.updater = true;
+        } catch (e) { console.error(e); }
+    }
+    
+    async function toggleUpdater() {
+        const btn = document.getElementById('updater-btn');
+        if (navigator.vibrate) navigator.vibrate(50);
+        btn.innerText = "⚙️ 底层执行中...";
+        btn.disabled = true;
+        btn.style.opacity = "0.7";
+        btn.style.transform = "scale(0.96)";
+
+        await new Promise(resolve => setTimeout(resolve, 600));
+
+        await ksu.exec(updaterIsFrozen 
+            ? `am force-stop com.android.updater; umount -l /product/app/Updater/Updater.apk 2>/dev/null; rm -f ${MY_MOD_DIR}/system/product/app/Updater/Updater.apk`
+            : `am force-stop com.android.updater; cp -p ${MY_MOD_DIR}/placeholder.apk ${MY_MOD_DIR}/system/product/app/Updater/Updater.apk; mount --bind ${MY_MOD_DIR}/system/product/app/Updater/Updater.apk /product/app/Updater/Updater.apk`
+        );
+        
+        await checkUpdaterStatus();
+        btn.style.transform = "scale(1)";
+        btn.style.opacity = "1";
+
+        if (updaterIsFrozen) {
+            showToast("❄️ 锁定成功！<br>下次重启后系统将保持【冻结】");
+        } else {
+            showToast("⚠️ 解除锁定！<br>下次重启后系统将【恢复更新】");
+        }
+    }
+
+    async function fetchDexoptStats() {
+        try {
+            document.getElementById('dexopt-badge').className = 'status-badge status-working';
+            document.getElementById('dexopt-badge').innerText = '底层后台扫描中';
+            const btn = document.getElementById('dexopt-btn');
+            btn.innerText = "⏳ 正在后台使用 V4 引擎深度扫描(耗时约15s)，随意滑动无影响...";
+            btn.disabled = true;
+
+            const shLines = [
+                "rm -f /data/local/tmp/aio_dexopt_raw.txt",
+                "PKGS=$(cmd package list packages -3 2>/dev/null | cut -d':' -f2 | tr -d '\\r')",
+                "if [ -z \"$PKGS\" ]; then PKGS=$(pm list packages -3 2>/dev/null | cut -d':' -f2 | tr -d '\\r'); fi",
+                "for pkg in $PKGS; do",
+                "    status=$(dumpsys package $pkg 2>/dev/null | grep -A 10 \"Dexopt state:\" | grep -m 1 \"status=\" | sed -n 's/.*\\[status=\\([^]]*\\)\\].*/\\1/p')",
+                "    [ -z \"$status\" ] && status=\"unknown\"",
+                "    echo \"$pkg|$status\" >> /data/local/tmp/aio_dexopt_raw.txt",
+                "done",
+                "echo \"===DONE===\" >> /data/local/tmp/aio_dexopt_raw.txt"
+            ];
+            
+            const b64Code = safeBtoa(shLines.join('\n'));
+            await ksu.exec(`echo "${b64Code}" | base64 -d > /data/local/tmp/aio_dexopt.sh && nohup sh /data/local/tmp/aio_dexopt.sh > /dev/null 2>&1 &`);
+
+            let pollTimer = setInterval(async () => {
+                let check = await ksu.exec('tail -n 1 /data/local/tmp/aio_dexopt_raw.txt 2>/dev/null');
+                let checkStr = String(check.stdout || check).trim().replace(/\r/g, '');
+                
+                if (checkStr === '===DONE===') {
+                    clearInterval(pollTimer);
+                    let b64Result = await ksu.exec('base64 -w 0 /data/local/tmp/aio_dexopt_raw.txt 2>/dev/null || base64 /data/local/tmp/aio_dexopt_raw.txt | tr -d "\\n"');
+                    let rawStr = String(b64Result.stdout || b64Result).trim();
+                    let rawOutput = new TextDecoder('utf-8').decode(Uint8Array.from(atob(rawStr), c => c.charCodeAt(0)));
+                    parseDexoptData(rawOutput);
+                }
+            }, 1500);
+        } catch (e) { console.error(e); }
+    }
+
+    function parseDexoptData(rawOutput) {
+        let counts = { speed: 0, profile: 0, verify: 0, apk: 0, unknown: 0 };
+        let lists = { speed: "", profile: "", verify: "", apk: "", unknown: "" };
+        let total = 0;
+
+        rawOutput.split('\n').forEach(line => {
+            const parts = line.split('|');
+            if(parts.length !== 2) return;
+            const pkg = parts[0].trim();
+            const status = parts[1].trim().replace(/\r/g, '');
+            if(pkg === '===DONE===') return; 
+            
+            total++;
+            if(status === 'speed') { counts.speed++; lists.speed += `<div>${pkg}</div>`; }
+            else if(status === 'speed-profile') { counts.profile++; lists.profile += `<div>${pkg}</div>`; }
+            else if(status === 'verify') { counts.verify++; lists.verify += `<div>${pkg}</div>`; }
+            else if(status === 'run-from-apk') { counts.apk++; lists.apk += `<div>${pkg}</div>`; }
+            else { counts.unknown++; lists.unknown += `<div>${pkg} [${status}]</div>`; }
+        });
+
+        const fullyCompiled = counts.speed + counts.profile;
+        document.getElementById('dexopt-brief').innerText = `已排查 ${total} 个应用 | 满血 ${fullyCompiled} 个`;
+        document.getElementById('dexopt-badge').className = 'status-badge status-success';
+        document.getElementById('dexopt-badge').innerText = '真理扫描完毕';
+
+        let html = '';
+        html += `<div class="stats-row"><span>🚀 speed (全量AOT最高性能)</span> <span class="stats-val" style="color:#34c759">${counts.speed} 个</span></div>`;
+        if (counts.speed > 0) html += `<details class="inner-card"><summary>▶ 展开查看详细名单</summary><div class="inner-list">${lists.speed}</div></details>`;
+        html += `<div class="stats-row"><span>⚡ speed-profile (官方推荐均衡)</span> <span class="stats-val" style="color:#007aff">${counts.profile} 个</span></div>`;
+        if (counts.profile > 0) html += `<details class="inner-card"><summary>▶ 展开查看详细名单</summary><div class="inner-list">${lists.profile}</div></details>`;
+        html += `<div class="stats-row"><span>🔍 verify (纯JIT无缓存)</span> <span class="stats-val" style="color:#ff9500">${counts.verify} 个</span></div>`;
+        if (counts.verify > 0) html += `<details class="inner-card"><summary>▶ 展开查看详细名单</summary><div class="inner-list">${lists.verify}</div></details>`;
+        html += `<div class="stats-row"><span>📦 run-from-apk (未提取极慢)</span> <span class="stats-val" style="color:#ff3b30">${counts.apk} 个</span></div>`;
+        if (counts.apk > 0) html += `<details class="inner-card"><summary>▶ 展开查看详细名单</summary><div class="inner-list">${lists.apk}</div></details>`;
+        html += `<div class="stats-row" style="margin-bottom:8px;"><span>❓ 其他/未知状态</span> <span class="stats-val" style="color:#8e8e93">${counts.unknown} 个</span></div>`;
+        if (counts.unknown > 0) html += `<details class="inner-card"><summary>▶ 展开查看异常名单</summary><div class="inner-list">${lists.unknown}</div></details>`;
+
+        document.getElementById('dexopt-stats').innerHTML = html;
+        const btn = document.getElementById('dexopt-btn');
+        btn.disabled = false;
+        btn.innerText = "🚀 后台静默执行全局满血编译";
+        loadState.dexopt = true;
+    }
+
+    async function triggerDexopt() {
+        if(isCompiling) return;
+        isCompiling = true;
+        
+        const btn = document.getElementById('dexopt-btn');
+        const progressBox = document.getElementById('dexopt-progress-box');
+        const progressFill = document.getElementById('dexopt-progress-fill');
+        const progressText = document.getElementById('dexopt-progress-text');
+        
+        if (navigator.vibrate) navigator.vibrate(50);
+        
+        btn.innerText = "⚙️ 引擎轰鸣中，请勿重复点击...";
+        btn.disabled = true;
+        btn.style.transform = "scale(0.96)";
+        setTimeout(() => { btn.style.transform = "scale(1)"; }, 300);
+
+        document.getElementById('dexopt-badge').className = 'status-badge status-working';
+        document.getElementById('dexopt-badge').innerText = '后台编译中';
+        showToast("🚀 编译引擎已在后台启动！");
+        
+        progressBox.style.display = 'block';
+        progressFill.style.width = '5%';
+        progressFill.style.background = 'var(--accent)';
+        let seconds = 0;
+        progressText.innerHTML = `正在下发指令 (耗时: <b>${seconds}s</b>) ...`;
+
+        let simProgress = 5;
+        let simTimer = setInterval(() => {
+            seconds++;
+            if(simProgress < 90) simProgress += (90 - simProgress) * 0.05; 
+            progressFill.style.width = `${simProgress}%`;
+            progressText.innerHTML = `正在执行系统全局优化 (已耗时: <b style="color:var(--text-main)">${seconds}s</b>)<br><span style="font-size:11px; opacity:0.7">您可以退出此界面，后台将继续静默执行</span>`;
+        }, 1000);
+        
+        const FLAG_FILE = `${MY_MOD_DIR}/compile_done.flag`;
+        const compileSh = [
+            `rm -f ${FLAG_FILE}`,
+            "export PATH=/system/bin:/system/xbin:$PATH",
+            "cmd package bg-dexopt-job",
+            "cmd notification post -t '全能系统管家' 'dexopt_done' '🎉 全局满血编译已在后台静默完成！' 2>/dev/null",
+            `echo '===DONE===' > ${FLAG_FILE}`
+        ];
+        
+        // 关键修复：更换为 safeBtoa
+        await ksu.exec(`echo "${safeBtoa(compileSh.join('\n'))}" | base64 -d > /data/local/tmp/aio_compile.sh && nohup sh /data/local/tmp/aio_compile.sh > /dev/null 2>&1 &`);
+
+        let pollTimer = setInterval(async () => {
+            let checkFile = await ksu.exec(`cat ${FLAG_FILE} 2>/dev/null`);
+            let isFileDone = String(checkFile.stdout || checkFile).trim().includes('===DONE===');
+            
+            let isProcDead = false;
+            if (seconds > 15) {
+                let checkProc = await ksu.exec(`ps -Aww | grep 'bg-dexopt-job' | grep -v 'grep'`);
+                let procResult = String(checkProc.stdout || checkProc).trim();
+                if (procResult === '') {
+                    isProcDead = true; 
+                }
+            }
+
+            if (isFileDone || isProcDead) {
+                clearInterval(pollTimer);
+                clearInterval(simTimer);
+                
+                progressFill.style.width = '100%';
+                progressFill.style.background = '#34c759';
+                
+                let finishReason = isFileDone ? "完美收官" : "静默收尾(防杀触发)";
+                progressText.innerHTML = `<span style="color:#34c759; font-weight:700;">✅ 编译${finishReason}！总耗时: ${seconds}s</span>`;
+                
+                isCompiling = false;
+                loadState.dexopt = false;
+                if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+                showToast(`🎉 全局满血编译已完成 (耗时 ${seconds}s)！`);
+                
+                setTimeout(() => {
+                    progressBox.style.display = 'none';
+                    fetchDexoptStats();
+                }, 3000);
+            }
+        }, 3000);
+    }
+
+    async function jump(moduleId) { 
+        if (navigator.vibrate) navigator.vibrate(30);
+        await ksu.exec(`am start -n bin.mt.plus.canary/bin.mt.plus.Main -d "file:///data/adb/modules/${moduleId}" || am start -n bin.mt.plus/bin.mt.plus.Main -d "file:///data/adb/modules/${moduleId}"`); 
+    }
+    
+    function toggleOrder() { 
+        if (navigator.vibrate) navigator.vibrate(30);
+        isDesc = !isDesc; 
+        document.getElementById('btnOrder').innerText = isDesc ? "倒序 ↑" : "正序 ↓"; 
+        renderList(); 
+    }
+    
+    function renderList() {
+        const sortKey = document.getElementById('selSort').value;
+        let filtered = [...allModules].sort((a, b) => { let res = sortKey === 'name' ? a.name.localeCompare(b.name, 'zh-Hans-CN') : b.mtime - a.mtime; return isDesc ? -res : res; });
+        
+        document.getElementById('app-modules').innerHTML = filtered.map(m => `
+            <div style="background: rgba(142,142,147,0.05); border-radius: 14px; padding: 12px; margin-bottom: 10px; display:flex; justify-content: space-between; align-items:center;">
+                <div style="flex:1; padding-right:10px; min-width: 0;">
+                    <div style="font-size:15px; font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${m.name} <span style="font-size:10px; padding:2px 6px; border-radius:8px; background:${m.enabled?'#34c759':'#ff3b30'}; color:white; flex-shrink: 0;">${m.enabled?'启用':'禁用'}</span>
+                    </div>
+                    <div style="font-size:12px; color:var(--text-sub); font-family:monospace;">${m.id}</div>
+                </div>
+                <button onclick="jump('${m.id}')" style="background:var(--card-bg); border:1px solid var(--border-color); color:var(--accent); font-weight:600; padding:8px 14px; border-radius:12px; box-shadow:0 2px 6px rgba(0,0,0,0.05); font-size:13px; flex-shrink: 0; cursor: pointer;">MT 目录</button>
+            </div>
+        `).join('');
+    }
+
+    async function loadModules() {
+        try {
+            const shellCmd = `
+                TMP=/data/local/tmp/k_mods_b64.txt
+                rm -f $TMP
+                for dir in /data/adb/modules/*; do
+                    if [ -d "$dir" ] && [ "$(basename "$dir")" != "A-gemini" ]; then
+                        id=$(basename "$dir")
+                        name=$(grep "^name=" "$dir/module.prop" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '\r')
+                        [ -z "$name" ] && name=$id
+                        enabled=1; [ -f "$dir/disable" ] && enabled=0
+                        mtime=$(stat -c %Y "$dir" 2>/dev/null || echo 0)
+                        echo "\${id}|||\${name}|||\${enabled}|||\${mtime}" >> $TMP
+                    fi
+                done
+                base64 -w 0 $TMP 2>/dev/null || base64 $TMP | tr -d '\n'
+            `;
+            const res = await ksu.exec(shellCmd);
+            let b64str = (typeof res === 'string') ? res : String(res.stdout||"");
+            if(b64str.trim()) {
+                const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str.trim()), c => c.charCodeAt(0)));
+                allModules = raw.trim().split('\n').filter(l=>l.includes('|||')).map(l=>{ let p=l.split('|||'); return {id:p[0], name:p[1], enabled:p[2]==='1', mtime:parseInt(p[3])||0}; });
+                
+                document.getElementById('module-brief').innerText = `已检测到 ${allModules.length} 个本地模块。`;
+                document.getElementById('module-badge').className = 'status-badge status-success';
+                document.getElementById('module-badge').innerText = '读取完毕';
+                renderList();
+                loadState.modules = true;
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    let kb_isWorking = false;
+
+    async function kb_checkStatus() {
+        try {
+            const sh = `
+                TS="/data/adb/tricky_store/keybox.xml"
+                if [ -f "$TS" ]; then
+                    SIZE=$(stat -c%s "$TS" 2>/dev/null || echo "未知")
+                    TIME=$(stat -c%y "$TS" 2>/dev/null | cut -d'.' -f1 || echo "未知时间")
+                    echo "EXIST|$SIZE|$TIME"
+                else
+                    echo "MISSING"
+                fi
+            `;
+            const res = await ksu.exec(sh);
+            const out = String(res.stdout || res).trim();
+            
+            const desc = document.getElementById('kb-status-desc');
+            const badge = document.getElementById('kb-badge');
+            const btn = document.getElementById('kb-btn');
+            
+            if (out.startsWith('EXIST')) {
+                let parts = out.split('|');
+                desc.innerHTML = `<span style="color:#34c759">✅ 本地已安装 Keybox</span><br>大小: ${parts[1]} 字节<br>更新时间: ${parts[2]}`;
+                badge.className = 'status-badge status-success';
+                badge.innerText = '已安装';
+            } else {
+                desc.innerHTML = `<span style="color:#ff3b30">⚠️ 未检测到 Keybox!</span><br>路径: /data/adb/tricky_store/keybox.xml 不存在。`;
+                badge.className = 'status-badge status-disabled';
+                badge.innerText = '缺失';
+            }
+            
+            btn.disabled = false;
+            loadState.keybox = true;
+        } catch (e) { console.error(e); }
+    }
+
+    async function kb_triggerUpdate() {
+        if (kb_isWorking) return;
+        kb_isWorking = true;
+        
+        const sourceVal = document.getElementById('kb-source-sel').value;
+        const btn = document.getElementById('kb-btn');
+        const progressBox = document.getElementById('kb-progress-box');
+        const progressFill = document.getElementById('kb-progress-fill');
+        const progressText = document.getElementById('kb-progress-text');
+        
+        if (navigator.vibrate) navigator.vibrate(50);
+        btn.disabled = true;
+        btn.innerText = "⏳ 破译通讯执行中...";
+        progressBox.style.display = 'block';
+        progressFill.style.width = '10%';
+        progressFill.style.background = 'var(--accent)';
+        progressText.innerText = "准备底层环境...";
+        progressText.style.color = "var(--accent)";
+
+        const STATUS_FILE = `${MY_MOD_DIR}/keybox_status.txt`;
+        const shellLogic = `
+            TS_DIR="/data/adb/tricky_store"
+            TARGET_KEYBOX="$TS_DIR/keybox.xml"
+            TMP_DIR="/data/local/tmp/keybox_update"
+            TMP_RAW="$TMP_DIR/raw.tmp"
+            TMP_KEYBOX="$TMP_DIR/keybox_tmp.xml"
+            STATUS_FILE="${STATUS_FILE}"
+
+            echo "STATUS:INIT|初始化下载环境并创建目录..." > $STATUS_FILE
+            rm -rf $TMP_DIR; mkdir -p $TMP_DIR; mkdir -p $TS_DIR
+
+            run_xxd() { if command -v xxd >/dev/null 2>&1; then xxd "$@"; elif command -v toybox >/dev/null 2>&1 && toybox xxd --help >/dev/null 2>&1; then toybox xxd "$@"; else echo "STATUS:ERROR|系统缺失 xxd 十六进制工具" > $STATUS_FILE; exit 1; fi; }
+            run_base64_d() { if command -v toybox >/dev/null 2>&1; then toybox base64 -d "$@"; else base64 -d "$@"; fi; }
+            download_file() {
+                if command -v curl >/dev/null 2>&1; then curl -k --connect-timeout 10 -sL "$1" -o "$2"
+                elif command -v wget >/dev/null 2>&1; then wget --no-check-certificate -qO "$2" "$1"
+                else echo "STATUS:ERROR|未找到 curl 或 wget" > $STATUS_FILE; exit 1; fi
+                [ -s "$2" ]
+            }
+
+            if [ "${sourceVal}" = "1" ]; then
+                echo "STATUS:DOWN|正在获取 Yurikey 通讯源..." > $STATUS_FILE
+                download_file "https://raw.githubusercontent.com/Yurii0307/yurikey/main/key" "$TMP_RAW" || { echo "STATUS:ERROR|Yurikey 下载失败" > $STATUS_FILE; exit 1; }
+                echo "STATUS:DECODE|执行 Base64 解码..." > $STATUS_FILE
+                run_base64_d "$TMP_RAW" > "$TMP_KEYBOX" 2>/dev/null
+            elif [ "${sourceVal}" = "2" ]; then
+                echo "STATUS:DOWN|正在获取 Tricky Addon 通讯源..." > $STATUS_FILE
+                download_file "https://raw.githubusercontent.com/KOWX712/Tricky-Addon-Update-Target-List/keybox/.extra" "$TMP_RAW" || { echo "STATUS:ERROR|Tricky Addon 下载失败" > $STATUS_FILE; exit 1; }
+                echo "STATUS:DECODE|执行 HEX 逆向与 Base64 双重解码..." > $STATUS_FILE
+                cat "$TMP_RAW" | run_xxd -r -p | run_base64_d > "$TMP_KEYBOX" 2>/dev/null
+            elif [ "${sourceVal}" = "3" ]; then
+                echo "STATUS:DOWN|获取 IntegrityBox 强加密源..." > $STATUS_FILE
+                if ! download_file "https://raw.gitmirror.com/MeowDump/MeowDump/refs/heads/main/NullVoid/OptimusPrime" "$TMP_RAW"; then
+                    echo "STATUS:DOWN|主源失败，切换至 GitHub 镜像源..." > $STATUS_FILE
+                    download_file "https://raw.githubusercontent.com/MeowDump/MeowDump/refs/heads/main/NullVoid/OptimusPrime" "$TMP_RAW" || { echo "STATUS:ERROR|所有源均不可用" > $STATUS_FILE; exit 1; }
+                fi
+                cp "$TMP_RAW" "$TMP_DIR/process.tmp"
+                for i in \$(seq 1 10); do
+                    echo "STATUS:DECODE|正在剥离第 $i/10 层 Base64 嵌套伪装..." > $STATUS_FILE
+                    run_base64_d "$TMP_DIR/process.tmp" > "$TMP_DIR/process.next" 2>/dev/null
+                    mv -f "$TMP_DIR/process.next" "$TMP_DIR/process.tmp"
+                done
+                echo "STATUS:DECODE|底层伪装剥除，执行 HEX 还原与 ROT13 置换..." > $STATUS_FILE
+                cat "$TMP_DIR/process.tmp" | run_xxd -r -p | tr 'A-Za-z' 'N-ZA-Mn-za-m' > "$TMP_KEYBOX"
+            fi
+
+            echo "STATUS:VALID|正在校验 Keybox XML 证书链完整性..." > $STATUS_FILE
+            if [ ! -s "$TMP_KEYBOX" ] || ! grep -q "<AndroidAttestation>" "$TMP_KEYBOX" || ! grep -q "BEGIN CERTIFICATE" "$TMP_KEYBOX"; then
+                echo "STATUS:ERROR|证书校验失败，密文已损毁或格式错误" > $STATUS_FILE
+                exit 1
+            fi
+
+            echo "STATUS:INSTALL|校验通过！正在注入 TrickyStore 底层..." > $STATUS_FILE
+            mv -f "$TMP_KEYBOX" "$TARGET_KEYBOX"
+            chmod 644 "$TARGET_KEYBOX"
+            rm -rf "$TMP_DIR"
+            echo "STATUS:DONE|🎉 Keybox 注入成功！" > $STATUS_FILE
+        `;
+
+        // 关键修复：更换为 safeBtoa
+        await ksu.exec(`echo "${safeBtoa(shellLogic)}" | base64 -d > /data/local/tmp/run_kb.sh && nohup sh /data/local/tmp/run_kb.sh >/dev/null 2>&1 &`);
+
+        let percent = 10;
+        let kbTimer = setInterval(async () => {
+            let res = await ksu.exec(`cat ${STATUS_FILE} 2>/dev/null`);
+            let out = String(res.stdout || res).trim();
+            
+            if (out.startsWith('STATUS:')) {
+                let parts = out.substring(7).split('|');
+                let stage = parts[0];
+                let msg = parts[1];
+                
+                progressText.innerText = msg;
+                
+                if (stage === 'DOWN') { percent = 30; }
+                else if (stage === 'DECODE') { percent = 60; }
+                else if (stage === 'VALID') { percent = 80; }
+                else if (stage === 'INSTALL') { percent = 95; }
+                
+                progressFill.style.width = percent + '%';
+                
+                if (stage === 'DONE') {
+                    clearInterval(kbTimer);
+                    progressFill.style.width = '100%';
+                    progressFill.style.background = '#34c759';
+                    progressText.style.color = '#34c759';
+                    progressText.style.fontWeight = '700';
+                    if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+                    showToast(msg);
+                    kb_isWorking = false;
+                    btn.innerText = "重新抓取注入";
+                    btn.disabled = false;
+                    kb_checkStatus(); 
+                } else if (stage === 'ERROR') {
+                    clearInterval(kbTimer);
+                    progressFill.style.background = '#ff3b30';
+                    progressText.style.color = '#ff3b30';
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                    showToast("❌ 注入失败：" + msg);
+                    kb_isWorking = false;
+                    btn.innerText = "失败，点击重试";
+                    btn.disabled = false;
+                }
+            }
+        }, 1000);
+    }
+</script>
+</body>
+</html>
