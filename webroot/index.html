@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>全能系统管家 V12</title>
+    <title>全能系统管家 V13</title>
     <style>
         :root { --bg: #f5f5f7; --card-bg: #ffffff; --text-main: #000000; --text-sub: #8e8e93; --accent: #007aff; --border-color: #f2f2f7; --shadow: 0 8px 24px rgba(0,0,0,0.04); }
         @media (prefers-color-scheme: dark) { :root { --bg: #000000; --card-bg: #1c1c1e; --text-main: #f5f5f5; --text-sub: #98989d; --border-color: #2c2c2e; --shadow: 0 8px 24px rgba(0,0,0,0.4); } }
@@ -54,6 +54,13 @@
         .progress-bar-fill::after { content: ""; position: absolute; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%); animation: shimmer 1.5s infinite; }
         @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         .progress-text { font-size: 13px; color: var(--text-sub); margin-top: 8px; text-align: center; display: none; font-weight: 500; }
+        
+        /* 运存防线 UI 所需表单样式 */
+        .input-group { margin-bottom: 12px; }
+        .input-label { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block; }
+        .mi-input { width: 100%; box-sizing: border-box; background: rgba(142,142,147,0.1); border: 1px solid transparent; padding: 12px; border-radius: 12px; color: var(--text-main); font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.3s; }
+        .mi-input:focus { border-color: var(--accent); }
+        textarea.mi-input { resize: vertical; min-height: 80px; font-family: monospace; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -62,8 +69,43 @@
 
 <div class="header">
     <h2>📱 全能管家</h2>
-    <span class="version-tag">V12 终极版</span>
+    <span class="version-tag">V13 聚合版</span>
 </div>
+
+<details class="miuix-card" id="card-ram" ontoggle="handleToggle(event, 'ram')">
+    <summary>
+        <div class="summary-left">
+            <div class="mod-title">🚀 运存防线引擎</div>
+            <div class="mod-desc">智能监控内存阈值，按时间倒序精准杀后台。</div>
+        </div>
+        <div class="summary-right">
+            <div id="ram-badge" class="status-badge status-idle">待读取</div>
+            <div class="chevron"></div>
+        </div>
+    </summary>
+    <div class="card-body">
+        <div style="background: rgba(142,142,147,0.05); padding: 12px; border-radius: 12px; margin-bottom: 16px;">
+            <div id="ram-status-text" style="font-size: 13px; font-weight: 500;">获取系统内存状态...</div>
+        </div>
+        <div class="input-group">
+            <label class="input-label">触发阈值 (%)</label>
+            <input type="number" id="ram-thresh" class="mi-input" placeholder="例如: 10">
+        </div>
+        <div class="input-group">
+            <label class="input-label">白名单 (每行一个包名)</label>
+            <textarea id="ram-white" class="mi-input" placeholder="如: com.tencent.mm"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">黑名单 (只要切后台立马干掉)</label>
+            <textarea id="ram-black" class="mi-input" placeholder="输入恶心软件的包名..."></textarea>
+        </div>
+        <div class="actions">
+            <button class="btn-main" onclick="ram_saveConfig()">💾 保存热更生效</button>
+            <button class="btn-main" style="flex: 0.5; background: rgba(142,142,147,0.1); color: var(--text-main);" onclick="ram_showLog()">📄 日志</button>
+        </div>
+        <div id="ram-log-box" class="inner-list" style="display:none; margin-top: 12px; font-size: 11px; max-height:150px; background: rgba(142,142,147,0.05); border-radius: 12px; padding: 12px;"></div>
+    </div>
+</details>
 
 <details class="miuix-card" id="card-redirect" ontoggle="handleToggle(event, 'redirect')">
     <summary>
@@ -234,8 +276,8 @@
     }
 
     const MY_MOD_DIR = '/data/adb/modules/A-gemini/';
-    // 【V12 新增】追加 redirect 状态
-    let loadState = { updater: false, dexopt: false, modules: false, keybox: false, redirect: false };
+    // 【V13 修改】追加 ram 状态
+    let loadState = { updater: false, dexopt: false, modules: false, keybox: false, redirect: false, ram: false };
     let updaterIsFrozen = false, isCompiling = false, allModules = [], isDesc = false;
 
     function handleToggle(event, cardName) {
@@ -255,19 +297,74 @@
                 document.getElementById('kb-badge').innerText = '读取中';
                 kb_checkStatus();
             } else if (cardName === 'redirect') {
-                // 【V12 新增】处理归档日志卡片展开
                 document.getElementById('redirect-badge').className = 'status-badge status-working';
                 document.getElementById('redirect-badge').innerText = '读取中';
                 fetchRedirectLogs();
+            } else if (cardName === 'ram') {
+                // 【V13】防线面板展开
+                document.getElementById('ram-badge').className = 'status-badge status-working';
+                document.getElementById('ram-badge').innerText = '同步中';
+                ram_init();
             }
         }
     }
 
-    // === 【V12 新增】模块归档日志核心逻辑 ===
+    // === 【V13 新增】运存防线 UI 控制核心逻辑 ===
+    async function ram_init() {
+        try {
+            const memRes = await ksu.exec(`MEM_TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo); MEM_AVAIL=$(awk '/MemAvailable/ {print $2}' /proc/meminfo); echo $(( MEM_AVAIL * 100 / MEM_TOTAL ))`);
+            document.getElementById('ram-status-text').innerHTML = `💡 当前系统剩余可用内存：<b style="color:var(--accent); font-size:15px;">${String(memRes.stdout||memRes).trim()}%</b>`;
+            
+            const b64cfg = await ksu.exec(`base64 -w 0 ${MY_MOD_DIR}ram_config.ini 2>/dev/null || base64 ${MY_MOD_DIR}ram_config.ini | tr -d '\\n'`);
+            const b64white = await ksu.exec(`base64 -w 0 ${MY_MOD_DIR}ram_white.conf 2>/dev/null || base64 ${MY_MOD_DIR}ram_white.conf | tr -d '\\n'`);
+            const b64black = await ksu.exec(`base64 -w 0 ${MY_MOD_DIR}ram_black.conf 2>/dev/null || base64 ${MY_MOD_DIR}ram_black.conf | tr -d '\\n'`);
+
+            if (String(b64cfg.stdout||"").trim()) {
+                const cfgStr = new TextDecoder('utf-8').decode(Uint8Array.from(atob(String(b64cfg.stdout||"").trim()), c => c.charCodeAt(0)));
+                const match = cfgStr.match(/avail_mem_percent=(\d+)/);
+                if (match) document.getElementById('ram-thresh').value = match[1];
+            }
+            if (String(b64white.stdout||"").trim()) document.getElementById('ram-white').value = new TextDecoder('utf-8').decode(Uint8Array.from(atob(String(b64white.stdout||"").trim()), c => c.charCodeAt(0)));
+            if (String(b64black.stdout||"").trim()) document.getElementById('ram-black').value = new TextDecoder('utf-8').decode(Uint8Array.from(atob(String(b64black.stdout||"").trim()), c => c.charCodeAt(0)));
+
+            document.getElementById('ram-badge').className = 'status-badge status-success';
+            document.getElementById('ram-badge').innerText = '运行中';
+            loadState.ram = true;
+        } catch(e) { console.error(e); }
+    }
+
+    async function ram_saveConfig() {
+        if (navigator.vibrate) navigator.vibrate(50);
+        const thresh = document.getElementById('ram-thresh').value || "10";
+        const white = document.getElementById('ram-white').value;
+        const black = document.getElementById('ram-black').value;
+        const shell = `echo "avail_mem_percent=${thresh}" > ${MY_MOD_DIR}ram_config.ini\necho "${safeBtoa(white)}" | base64 -d > ${MY_MOD_DIR}ram_white.conf\necho "${safeBtoa(black)}" | base64 -d > ${MY_MOD_DIR}ram_black.conf`;
+        await ksu.exec(shell);
+        showToast("✅ 防线配置已保存，底座热更生效！");
+        ram_init();
+    }
+
+    async function ram_showLog() {
+        const logBox = document.getElementById('ram-log-box');
+        logBox.style.display = logBox.style.display === 'none' ? 'block' : 'none';
+        if (logBox.style.display === 'block') {
+            logBox.innerHTML = "读取日志中...";
+            const res = await ksu.exec(`tail -n 10 ${MY_MOD_DIR}ram.log 2>/dev/null | base64 -w 0 2>/dev/null || tail -n 10 ${MY_MOD_DIR}ram.log | base64 | tr -d '\\n'`);
+            let b64str = String(res.stdout||"").trim();
+            if (b64str) {
+                const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str), c => c.charCodeAt(0)));
+                logBox.innerHTML = raw.trim().split('\n').reverse().map(l => `<div>${l}</div>`).join('');
+            } else {
+                logBox.innerHTML = "暂无击杀记录，系统内存很充裕。";
+            }
+        }
+    }
+
+
+    // === 【V12】模块归档日志核心逻辑 ===
     async function fetchRedirectLogs() {
         try {
             const logPath = MY_MOD_DIR + 'move_log.txt';
-            // 安全读取 Base64，兼容不同的 Android 底层环境，剥离换行符
             const res = await ksu.exec(`[ -f "${logPath}" ] && (base64 -w 0 "${logPath}" 2>/dev/null || base64 "${logPath}" | tr -d '\\n') || echo ""`);
             let b64str = (typeof res === 'string') ? res : String(res.stdout || "");
             
@@ -280,7 +377,6 @@
                 badge.innerText = "监控中";
             } else {
                 const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str.trim()), c => c.charCodeAt(0)));
-                // 将日志行倒序排列，让最新的操作显示在最顶端
                 const lines = raw.trim().split('\n').filter(line => line.trim() !== "").reverse();
                 logBox.innerHTML = lines.map(line => `<div>${line}</div>`).join('');
                 badge.className = "status-badge status-success";
@@ -300,7 +396,6 @@
         showToast("🗑️ 日志记录已清空");
         fetchRedirectLogs();
     }
-    // ==========================================
 
     async function checkUpdaterStatus() {
         try {

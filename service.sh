@@ -83,6 +83,7 @@ MODDIR="${0%/*}"
     /data/data/com.tencent.mm/MicroMsg/f65a3b31e7fd9cd472a299bbe9deccb3/attachment
     /storage/emulated/0/Android/data/org.telegram.messenger.web/files/Telegram/Telegram Files
     /storage/emulated/0/Download
+    storage/emulated/0
     "
 
     # 等待开机
@@ -139,6 +140,88 @@ MODDIR="${0%/*}"
             fi
         done
         # 每 10 秒巡逻一次
+        sleep 10
+    done
+) &
+# ==================================================
+# 守护核心 4：运存防线 (严格时间倒序精准杀后台)
+# ==================================================
+(
+    RAM_CFG="$MODDIR/ram_config.ini"
+    RAM_WHITE="$MODDIR/ram_white.conf"
+    RAM_BLACK="$MODDIR/ram_black.conf"
+    RAM_LOG="$MODDIR/ram.log"
+
+    # 如果配置不存在，初始化默认文件
+    [ ! -f "$RAM_CFG" ] && echo "avail_mem_percent=10" > "$RAM_CFG"
+    [ ! -f "$RAM_WHITE" ] && echo -e "com.tencent.mm\ncom.tencent.mobileqq" > "$RAM_WHITE"
+    [ ! -f "$RAM_BLACK" ] && touch "$RAM_BLACK"
+
+    get_threshold() {
+        grep -v "^#" "$RAM_CFG" | grep "avail_mem_percent" | cut -d'=' -f2 | tr -d '\r' | tr -d ' '
+    }
+
+    # 延迟启动，避免开机拥堵
+    until [ "$(getprop sys.boot_completed)" = "1" ]; do sleep 10; done
+    sleep 30
+
+    THRESHOLD_PERCENT=$(get_threshold)
+    [ -z "$THRESHOLD_PERCENT" ] && THRESHOLD_PERCENT=10
+    LAST_MTIME=$(stat -c %Z "$RAM_CFG" 2>/dev/null)
+
+    echo "$(date '+%m-%d %H:%M:%S'): 防线已启动(倒序模式)，阈值: ${THRESHOLD_PERCENT}%" >> "$RAM_LOG"
+
+    while true; do
+        # 1. 监听配置是否修改
+        CURRENT_MTIME=$(stat -c %Z "$RAM_CFG" 2>/dev/null)
+        if [ "$CURRENT_MTIME" != "$LAST_MTIME" ]; then
+            NEW_THRESHOLD=$(get_threshold)
+            if [ -n "$NEW_THRESHOLD" ]; then
+                THRESHOLD_PERCENT=$NEW_THRESHOLD
+                echo "$(date '+%m-%d %H:%M:%S'): 热更配置，新阈值: ${THRESHOLD_PERCENT}%" >> "$RAM_LOG"
+            fi
+            LAST_MTIME=$CURRENT_MTIME
+        fi
+
+        # 2. 读取内存
+        MEM_TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+        MEM_AVAIL=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
+        CURRENT_PERCENT=$(( MEM_AVAIL * 100 / MEM_TOTAL ))
+
+        # 3. 触发查杀
+        if [ "$CURRENT_PERCENT" -lt "$THRESHOLD_PERCENT" ]; then
+            # 黑名单秒杀
+            if [ -s "$RAM_BLACK" ]; then
+                for pkg in $(grep -v "^#" "$RAM_BLACK" | tr -d '\r' | grep -v "^$"); do
+                    if pidof "$pkg" > /dev/null; then
+                        am force-stop "$pkg"
+                        echo "$(date '+%H:%M:%S'): 内存 ${CURRENT_PERCENT}%，黑名单击杀 -> $pkg" >> "$RAM_LOG"
+                        sleep 1
+                    fi
+                done
+            fi
+
+            # 时间倒序查杀 (获取多任务列表并倒排)
+            recent_pkgs=$(dumpsys activity recents | grep "realActivity=" | cut -d'=' -f2 | cut -d'/' -f1 | tr -d '{' | uniq | awk '{a[i++]=$0} END {for (j=i-1; j>=0; j--) print a[j]}')
+            
+            for pkg_name in $recent_pkgs; do
+                if [ -z "$pkg_name" ] || [ "$pkg_name" = "android" ] || [ "$pkg_name" = "com.miui.home" ]; then
+                    continue
+                fi
+                if grep -q -E "^${pkg_name}$" "$RAM_WHITE" 2>/dev/null; then 
+                    continue
+                fi
+
+                if pidof "$pkg_name" > /dev/null; then
+                    am force-stop "$pkg_name"
+                    echo "$(date '+%H:%M:%S'): 内存 ${CURRENT_PERCENT}% < ${THRESHOLD_PERCENT}%，倒序清理 -> $pkg_name" >> "$RAM_LOG"
+                    # 日志控制在100行防爆
+                    tail -n 100 "$RAM_LOG" > "$RAM_LOG.tmp" && mv "$RAM_LOG.tmp" "$RAM_LOG"
+                    sleep 1
+                    break 
+                fi
+            done
+        fi
         sleep 10
     done
 ) &
