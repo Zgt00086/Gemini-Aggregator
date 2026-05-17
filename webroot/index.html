@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>全能系统管家 V13</title>
+    <title>全能系统管家 V13.3</title>
     <style>
         :root { --bg: #f5f5f7; --card-bg: #ffffff; --text-main: #000000; --text-sub: #8e8e93; --accent: #007aff; --border-color: #f2f2f7; --shadow: 0 8px 24px rgba(0,0,0,0.04); }
         @media (prefers-color-scheme: dark) { :root { --bg: #000000; --card-bg: #1c1c1e; --text-main: #f5f5f5; --text-sub: #98989d; --border-color: #2c2c2e; --shadow: 0 8px 24px rgba(0,0,0,0.4); } }
@@ -55,12 +55,11 @@
         @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         .progress-text { font-size: 13px; color: var(--text-sub); margin-top: 8px; text-align: center; display: none; font-weight: 500; }
         
-        /* 运存防线 UI 所需表单样式 */
         .input-group { margin-bottom: 12px; }
         .input-label { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block; }
         .mi-input { width: 100%; box-sizing: border-box; background: rgba(142,142,147,0.1); border: 1px solid transparent; padding: 12px; border-radius: 12px; color: var(--text-main); font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.3s; }
         .mi-input:focus { border-color: var(--accent); }
-        textarea.mi-input { resize: vertical; min-height: 80px; font-family: monospace; font-size: 13px; }
+        textarea.mi-input { resize: vertical; min-height: 80px; font-family: monospace; font-size: 13px; white-space: pre; }
     </style>
 </head>
 <body>
@@ -69,7 +68,7 @@
 
 <div class="header">
     <h2>📱 全能管家</h2>
-    <span class="version-tag">V13 聚合版</span>
+    <span class="version-tag">V13.3 防截断版</span>
 </div>
 
 <details class="miuix-card" id="card-ram" ontoggle="handleToggle(event, 'ram')">
@@ -92,18 +91,18 @@
             <input type="number" id="ram-thresh" class="mi-input" placeholder="例如: 10">
         </div>
         <div class="input-group">
-            <label class="input-label">白名单 (每行一个包名)</label>
+            <label class="input-label">白名单 (每行一个包名，免杀保护)</label>
             <textarea id="ram-white" class="mi-input" placeholder="如: com.tencent.mm"></textarea>
         </div>
         <div class="input-group">
-            <label class="input-label">黑名单 (只要切后台立马干掉)</label>
-            <textarea id="ram-black" class="mi-input" placeholder="输入恶心软件的包名..."></textarea>
+            <label class="input-label">黑名单 (只要切后台立刻干掉)</label>
+            <textarea id="ram-black" class="mi-input" placeholder="如: com.sohu.infonews"></textarea>
         </div>
         <div class="actions">
-            <button class="btn-main" onclick="ram_saveConfig()">💾 保存热更生效</button>
+            <button class="btn-main" onclick="ram_saveConfig()">💾 保存配置并热更</button>
             <button class="btn-main" style="flex: 0.5; background: rgba(142,142,147,0.1); color: var(--text-main);" onclick="ram_showLog()">📄 日志</button>
         </div>
-        <div id="ram-log-box" class="inner-list" style="display:none; margin-top: 12px; font-size: 11px; max-height:150px; background: rgba(142,142,147,0.05); border-radius: 12px; padding: 12px;"></div>
+        <div id="ram-log-box" class="inner-list" style="display:none; margin-top: 12px; font-size: 12px; max-height:200px; background: rgba(142,142,147,0.05); border-radius: 12px; padding: 12px;"></div>
     </div>
 </details>
 
@@ -154,7 +153,7 @@
     <summary>
         <div class="summary-left">
             <div class="mod-title">⚡ Smart DexOpt 引擎</div>
-            <div class="mod-desc" id="dexopt-brief">采用 Base64 封包传输，完美读取 100% 数据。</div>
+            <div class="mod-desc" id="dexopt-brief">采用纯命令行传输，完美读取 100% 数据。</div>
         </div>
         <div class="summary-right">
             <div id="dexopt-badge" class="status-badge status-idle">待扫描</div>
@@ -253,7 +252,6 @@
 </div>
 
 <script>
-    // 【核心修复】全局捕获所有的常规错误和未处理的 Promise（异步）错误
     window.onerror = function(msg, url, line) {
         document.getElementById('error-log').style.display = 'block';
         document.getElementById('error-log').innerHTML += `🚨 同步异常: ${msg} (行 ${line})<br>`;
@@ -270,13 +268,23 @@
         setTimeout(() => { toast.classList.remove('toast-show'); }, 3000);
     }
 
-    // 【核心修复】使用支持 UTF-8 的安全 Base64 转码函数，彻底解决中文脚本导致的崩溃
-    function safeBtoa(str) {
-        return window.btoa(unescape(encodeURIComponent(str)));
+    // 核心安全转码：文本 -> Base64
+    function safeBtoa(str) { return window.btoa(unescape(encodeURIComponent(str))); }
+
+    // 【防截断黑科技】读取多行文件时，底层强转 Base64 并且剔除所有换行符传给前端解密
+    async function safeReadMultilineB64(filepath) {
+        try {
+            let res = await ksu.exec(`if [ -f "${filepath}" ]; then cat "${filepath}" | base64 | tr -d '\\n'; fi`);
+            let b64 = String(res.stdout || res).trim();
+            if (!b64) return "";
+            return new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
+        } catch (e) {
+            console.error("安全读取异常:", e);
+            return "";
+        }
     }
 
     const MY_MOD_DIR = '/data/adb/modules/A-gemini/';
-    // 【V13 修改】追加 ram 状态
     let loadState = { updater: false, dexopt: false, modules: false, keybox: false, redirect: false, ram: false };
     let updaterIsFrozen = false, isCompiling = false, allModules = [], isDesc = false;
 
@@ -301,7 +309,6 @@
                 document.getElementById('redirect-badge').innerText = '读取中';
                 fetchRedirectLogs();
             } else if (cardName === 'ram') {
-                // 【V13】防线面板展开
                 document.getElementById('ram-badge').className = 'status-badge status-working';
                 document.getElementById('ram-badge').innerText = '同步中';
                 ram_init();
@@ -309,23 +316,20 @@
         }
     }
 
-    // === 【V13 新增】运存防线 UI 控制核心逻辑 ===
+    // === 【V13.3】彻底修复截断的运存防线 UI 控制逻辑 ===
     async function ram_init() {
         try {
-            const memRes = await ksu.exec(`MEM_TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo); MEM_AVAIL=$(awk '/MemAvailable/ {print $2}' /proc/meminfo); echo $(( MEM_AVAIL * 100 / MEM_TOTAL ))`);
-            document.getElementById('ram-status-text').innerHTML = `💡 当前系统剩余可用内存：<b style="color:var(--accent); font-size:15px;">${String(memRes.stdout||memRes).trim()}%</b>`;
+            const memRes = await ksu.exec(`awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{printf "%.0f", (a/t)*100}' /proc/meminfo`);
+            let memVal = String(memRes.stdout||memRes).trim();
+            document.getElementById('ram-status-text').innerHTML = `💡 当前系统剩余可用内存：<b style="color:var(--accent); font-size:15px;">${memVal}%</b>`;
             
-            const b64cfg = await ksu.exec(`base64 -w 0 ${MY_MOD_DIR}ram_config.ini 2>/dev/null || base64 ${MY_MOD_DIR}ram_config.ini | tr -d '\\n'`);
-            const b64white = await ksu.exec(`base64 -w 0 ${MY_MOD_DIR}ram_white.conf 2>/dev/null || base64 ${MY_MOD_DIR}ram_white.conf | tr -d '\\n'`);
-            const b64black = await ksu.exec(`base64 -w 0 ${MY_MOD_DIR}ram_black.conf 2>/dev/null || base64 ${MY_MOD_DIR}ram_black.conf | tr -d '\\n'`);
+            // 使用安全的防截断函数读取数据
+            const cfgStr = await safeReadMultilineB64(`${MY_MOD_DIR}ram_config.ini`);
+            const match = cfgStr.match(/avail_mem_percent=(\d+)/);
+            if (match) document.getElementById('ram-thresh').value = match[1];
 
-            if (String(b64cfg.stdout||"").trim()) {
-                const cfgStr = new TextDecoder('utf-8').decode(Uint8Array.from(atob(String(b64cfg.stdout||"").trim()), c => c.charCodeAt(0)));
-                const match = cfgStr.match(/avail_mem_percent=(\d+)/);
-                if (match) document.getElementById('ram-thresh').value = match[1];
-            }
-            if (String(b64white.stdout||"").trim()) document.getElementById('ram-white').value = new TextDecoder('utf-8').decode(Uint8Array.from(atob(String(b64white.stdout||"").trim()), c => c.charCodeAt(0)));
-            if (String(b64black.stdout||"").trim()) document.getElementById('ram-black').value = new TextDecoder('utf-8').decode(Uint8Array.from(atob(String(b64black.stdout||"").trim()), c => c.charCodeAt(0)));
+            document.getElementById('ram-white').value = await safeReadMultilineB64(`${MY_MOD_DIR}ram_white.conf`);
+            document.getElementById('ram-black').value = await safeReadMultilineB64(`${MY_MOD_DIR}ram_black.conf`);
 
             document.getElementById('ram-badge').className = 'status-badge status-success';
             document.getElementById('ram-badge').innerText = '运行中';
@@ -336,11 +340,17 @@
     async function ram_saveConfig() {
         if (navigator.vibrate) navigator.vibrate(50);
         const thresh = document.getElementById('ram-thresh').value || "10";
-        const white = document.getElementById('ram-white').value;
-        const black = document.getElementById('ram-black').value;
-        const shell = `echo "avail_mem_percent=${thresh}" > ${MY_MOD_DIR}ram_config.ini\necho "${safeBtoa(white)}" | base64 -d > ${MY_MOD_DIR}ram_white.conf\necho "${safeBtoa(black)}" | base64 -d > ${MY_MOD_DIR}ram_black.conf`;
+        const white = document.getElementById('ram-white').value || "";
+        const black = document.getElementById('ram-black').value || "";
+        
+        // 写入多行时，走 Base64 解码，完美兼容所有带换行的包名列表
+        let shell = `echo "avail_mem_percent=${thresh}" > ${MY_MOD_DIR}ram_config.ini\n`;
+        shell += white.trim() ? `echo "${safeBtoa(white)}" | base64 -d > ${MY_MOD_DIR}ram_white.conf\n` : `> ${MY_MOD_DIR}ram_white.conf\n`;
+        shell += black.trim() ? `echo "${safeBtoa(black)}" | base64 -d > ${MY_MOD_DIR}ram_black.conf\n` : `> ${MY_MOD_DIR}ram_black.conf\n`;
+        shell += `chmod 666 ${MY_MOD_DIR}ram_config.ini ${MY_MOD_DIR}ram_white.conf ${MY_MOD_DIR}ram_black.conf`;
+        
         await ksu.exec(shell);
-        showToast("✅ 防线配置已保存，底座热更生效！");
+        showToast("✅ 配置已防截断保存，底座热更生效！");
         ram_init();
     }
 
@@ -349,35 +359,40 @@
         logBox.style.display = logBox.style.display === 'none' ? 'block' : 'none';
         if (logBox.style.display === 'block') {
             logBox.innerHTML = "读取日志中...";
-            const res = await ksu.exec(`tail -n 10 ${MY_MOD_DIR}ram.log 2>/dev/null | base64 -w 0 2>/dev/null || tail -n 10 ${MY_MOD_DIR}ram.log | base64 | tr -d '\\n'`);
-            let b64str = String(res.stdout||"").trim();
-            if (b64str) {
-                const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str), c => c.charCodeAt(0)));
-                logBox.innerHTML = raw.trim().split('\n').reverse().map(l => `<div>${l}</div>`).join('');
-            } else {
-                logBox.innerHTML = "暂无击杀记录，系统内存很充裕。";
+            try {
+                // 使用防截断封装方法读取最新 20 条日志
+                let res = await ksu.exec(`if [ -f "${MY_MOD_DIR}ram.log" ]; then tail -n 20 "${MY_MOD_DIR}ram.log" | base64 | tr -d '\\n'; fi`);
+                let b64 = String(res.stdout || res).trim();
+                if (!b64) {
+                    logBox.innerHTML = "系统暂未触发击杀记录。";
+                    return;
+                }
+                const rawLog = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
+                logBox.innerHTML = rawLog.trim().split('\n').reverse().map(l => `<div style="padding:4px 0; border-bottom:1px dashed rgba(142,142,147,0.2);">${l}</div>`).join('');
+            } catch (e) {
+                logBox.innerHTML = "日志读取异常，请检查文件权限。";
             }
         }
     }
 
 
-    // === 【V12】模块归档日志核心逻辑 ===
+    // === 模块归档日志逻辑 (同样应用防截断技术) ===
     async function fetchRedirectLogs() {
         try {
             const logPath = MY_MOD_DIR + 'move_log.txt';
-            const res = await ksu.exec(`[ -f "${logPath}" ] && (base64 -w 0 "${logPath}" 2>/dev/null || base64 "${logPath}" | tr -d '\\n') || echo ""`);
-            let b64str = (typeof res === 'string') ? res : String(res.stdout || "");
+            let res = await ksu.exec(`if [ -f "${logPath}" ]; then tail -n 30 "${logPath}" | base64 | tr -d '\\n'; fi`);
+            let b64 = String(res.stdout || res).trim();
             
             const logBox = document.getElementById('redirect-log-box');
             const badge = document.getElementById('redirect-badge');
 
-            if (b64str.trim() === "") {
+            if (!b64) {
                 logBox.innerHTML = "<div style='text-align:center; padding:10px;'>暂无归档记录，您可以前往下载一个 ZIP 模块试试。</div>";
                 badge.className = "status-badge status-idle";
                 badge.innerText = "监控中";
             } else {
-                const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str.trim()), c => c.charCodeAt(0)));
-                const lines = raw.trim().split('\n').filter(line => line.trim() !== "").reverse();
+                const rawLog = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
+                const lines = rawLog.trim().split('\n').reverse();
                 logBox.innerHTML = lines.map(line => `<div>${line}</div>`).join('');
                 badge.className = "status-badge status-success";
                 badge.innerText = "有新归档";
@@ -477,9 +492,10 @@
                 
                 if (checkStr === '===DONE===') {
                     clearInterval(pollTimer);
-                    let b64Result = await ksu.exec('base64 -w 0 /data/local/tmp/aio_dexopt_raw.txt 2>/dev/null || base64 /data/local/tmp/aio_dexopt_raw.txt | tr -d "\\n"');
-                    let rawStr = String(b64Result.stdout || b64Result).trim();
-                    let rawOutput = new TextDecoder('utf-8').decode(Uint8Array.from(atob(rawStr), c => c.charCodeAt(0)));
+                    // Dexopt 也应用防截断读取
+                    let res = await ksu.exec('cat /data/local/tmp/aio_dexopt_raw.txt 2>/dev/null | base64 | tr -d "\\n"');
+                    let b64 = String(res.stdout || res).trim();
+                    let rawOutput = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
                     parseDexoptData(rawOutput);
                 }
             }, 1500);
@@ -655,12 +671,12 @@
                         echo "\${id}|||\${name}|||\${enabled}|||\${mtime}" >> $TMP
                     fi
                 done
-                base64 -w 0 $TMP 2>/dev/null || base64 $TMP | tr -d '\n'
+                cat $TMP 2>/dev/null | base64 | tr -d '\n'
             `;
             const res = await ksu.exec(shellCmd);
-            let b64str = (typeof res === 'string') ? res : String(res.stdout||"");
-            if(b64str.trim()) {
-                const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str.trim()), c => c.charCodeAt(0)));
+            let b64str = String(res.stdout||"").trim();
+            if(b64str) {
+                const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str), c => c.charCodeAt(0)));
                 allModules = raw.trim().split('\n').filter(l=>l.includes('|||')).map(l=>{ let p=l.split('|||'); return {id:p[0], name:p[1], enabled:p[2]==='1', mtime:parseInt(p[3])||0}; });
                 
                 document.getElementById('module-brief').innerText = `已检测到 ${allModules.length} 个本地模块。`;
