@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>全能系统管家 V13.3</title>
+    <title>全能系统管家 V13.2</title>
     <style>
         :root { --bg: #f5f5f7; --card-bg: #ffffff; --text-main: #000000; --text-sub: #8e8e93; --accent: #007aff; --border-color: #f2f2f7; --shadow: 0 8px 24px rgba(0,0,0,0.04); }
         @media (prefers-color-scheme: dark) { :root { --bg: #000000; --card-bg: #1c1c1e; --text-main: #f5f5f5; --text-sub: #98989d; --border-color: #2c2c2e; --shadow: 0 8px 24px rgba(0,0,0,0.4); } }
@@ -68,7 +68,7 @@
 
 <div class="header">
     <h2>📱 全能管家</h2>
-    <span class="version-tag">V13.3 防截断版</span>
+    <span class="version-tag">V13.2 终极修复版</span>
 </div>
 
 <details class="miuix-card" id="card-ram" ontoggle="handleToggle(event, 'ram')">
@@ -271,11 +271,16 @@
     // 核心安全转码：文本 -> Base64
     function safeBtoa(str) { return window.btoa(unescape(encodeURIComponent(str))); }
 
-    // 【防截断黑科技】读取多行文件时，底层强转 Base64 并且剔除所有换行符传给前端解密
+    // 【核心修复】：兼容新老 KSU API 的执行结果提取，防 null/undefined
+    function extractStdout(res) {
+        return (typeof res === 'string') ? res.trim() : String(res?.stdout || "").trim();
+    }
+
+    // 防截断读取
     async function safeReadMultilineB64(filepath) {
         try {
             let res = await ksu.exec(`if [ -f "${filepath}" ]; then cat "${filepath}" | base64 | tr -d '\\n'; fi`);
-            let b64 = String(res.stdout || res).trim();
+            let b64 = extractStdout(res);
             if (!b64) return "";
             return new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
         } catch (e) {
@@ -316,14 +321,12 @@
         }
     }
 
-    // === 【V13.3】彻底修复截断的运存防线 UI 控制逻辑 ===
     async function ram_init() {
         try {
             const memRes = await ksu.exec(`awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{printf "%.0f", (a/t)*100}' /proc/meminfo`);
-            let memVal = String(memRes.stdout||memRes).trim();
+            let memVal = extractStdout(memRes);
             document.getElementById('ram-status-text').innerHTML = `💡 当前系统剩余可用内存：<b style="color:var(--accent); font-size:15px;">${memVal}%</b>`;
             
-            // 使用安全的防截断函数读取数据
             const cfgStr = await safeReadMultilineB64(`${MY_MOD_DIR}ram_config.ini`);
             const match = cfgStr.match(/avail_mem_percent=(\d+)/);
             if (match) document.getElementById('ram-thresh').value = match[1];
@@ -343,7 +346,6 @@
         const white = document.getElementById('ram-white').value || "";
         const black = document.getElementById('ram-black').value || "";
         
-        // 写入多行时，走 Base64 解码，完美兼容所有带换行的包名列表
         let shell = `echo "avail_mem_percent=${thresh}" > ${MY_MOD_DIR}ram_config.ini\n`;
         shell += white.trim() ? `echo "${safeBtoa(white)}" | base64 -d > ${MY_MOD_DIR}ram_white.conf\n` : `> ${MY_MOD_DIR}ram_white.conf\n`;
         shell += black.trim() ? `echo "${safeBtoa(black)}" | base64 -d > ${MY_MOD_DIR}ram_black.conf\n` : `> ${MY_MOD_DIR}ram_black.conf\n`;
@@ -360,9 +362,8 @@
         if (logBox.style.display === 'block') {
             logBox.innerHTML = "读取日志中...";
             try {
-                // 使用防截断封装方法读取最新 20 条日志
                 let res = await ksu.exec(`if [ -f "${MY_MOD_DIR}ram.log" ]; then tail -n 20 "${MY_MOD_DIR}ram.log" | base64 | tr -d '\\n'; fi`);
-                let b64 = String(res.stdout || res).trim();
+                let b64 = extractStdout(res);
                 if (!b64) {
                     logBox.innerHTML = "系统暂未触发击杀记录。";
                     return;
@@ -376,12 +377,11 @@
     }
 
 
-    // === 模块归档日志逻辑 (同样应用防截断技术) ===
     async function fetchRedirectLogs() {
         try {
             const logPath = MY_MOD_DIR + 'move_log.txt';
             let res = await ksu.exec(`if [ -f "${logPath}" ]; then tail -n 30 "${logPath}" | base64 | tr -d '\\n'; fi`);
-            let b64 = String(res.stdout || res).trim();
+            let b64 = extractStdout(res);
             
             const logBox = document.getElementById('redirect-log-box');
             const badge = document.getElementById('redirect-badge');
@@ -415,7 +415,7 @@
     async function checkUpdaterStatus() {
         try {
             const res = await ksu.exec(`[ -f "${MY_MOD_DIR}/system/product/app/Updater/Updater.apk" ] && echo 1 || echo 0`);
-            updaterIsFrozen = String(res.stdout || res).trim() === '1';
+            updaterIsFrozen = extractStdout(res) === '1';
             
             document.getElementById('updater-badge').className = updaterIsFrozen ? 'status-badge status-success' : 'status-badge status-disabled';
             document.getElementById('updater-badge').innerText = updaterIsFrozen ? '已冻结 ❄️' : '未防护 ⚠️';
@@ -488,13 +488,12 @@
 
             let pollTimer = setInterval(async () => {
                 let check = await ksu.exec('tail -n 1 /data/local/tmp/aio_dexopt_raw.txt 2>/dev/null');
-                let checkStr = String(check.stdout || check).trim().replace(/\r/g, '');
+                let checkStr = extractStdout(check);
                 
                 if (checkStr === '===DONE===') {
                     clearInterval(pollTimer);
-                    // Dexopt 也应用防截断读取
                     let res = await ksu.exec('cat /data/local/tmp/aio_dexopt_raw.txt 2>/dev/null | base64 | tr -d "\\n"');
-                    let b64 = String(res.stdout || res).trim();
+                    let b64 = extractStdout(res);
                     let rawOutput = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
                     parseDexoptData(rawOutput);
                 }
@@ -593,12 +592,12 @@
 
         let pollTimer = setInterval(async () => {
             let checkFile = await ksu.exec(`cat ${FLAG_FILE} 2>/dev/null`);
-            let isFileDone = String(checkFile.stdout || checkFile).trim().includes('===DONE===');
+            let isFileDone = extractStdout(checkFile).includes('===DONE===');
             
             let isProcDead = false;
             if (seconds > 15) {
                 let checkProc = await ksu.exec(`ps -Aww | grep 'bg-dexopt-job' | grep -v 'grep'`);
-                let procResult = String(checkProc.stdout || checkProc).trim();
+                let procResult = extractStdout(checkProc);
                 if (procResult === '') {
                     isProcDead = true; 
                 }
@@ -627,9 +626,10 @@
         }, 3000);
     }
 
+    // 【核心修复】：加上了 --user 0 确保 Android 14+ 能顺利调起其他 App
     async function jump(moduleId) { 
         if (navigator.vibrate) navigator.vibrate(30);
-        await ksu.exec(`am start -n bin.mt.plus.canary/bin.mt.plus.Main -d "file:///data/adb/modules/${moduleId}" || am start -n bin.mt.plus/bin.mt.plus.Main -d "file:///data/adb/modules/${moduleId}"`); 
+        await ksu.exec(`am start --user 0 -n bin.mt.plus.canary/bin.mt.plus.Main -d "file:///data/adb/modules/${moduleId}" || am start --user 0 -n bin.mt.plus/bin.mt.plus.Main -d "file:///data/adb/modules/${moduleId}"`); 
     }
     
     function toggleOrder() { 
@@ -674,7 +674,10 @@
                 cat $TMP 2>/dev/null | base64 | tr -d '\n'
             `;
             const res = await ksu.exec(shellCmd);
-            let b64str = String(res.stdout||"").trim();
+            
+            // 【核心修复】：兼容新版 KSU 直接返回对象的情况，防止空指针
+            let b64str = extractStdout(res);
+            
             if(b64str) {
                 const raw = new TextDecoder('utf-8').decode(Uint8Array.from(atob(b64str), c => c.charCodeAt(0)));
                 allModules = raw.trim().split('\n').filter(l=>l.includes('|||')).map(l=>{ let p=l.split('|||'); return {id:p[0], name:p[1], enabled:p[2]==='1', mtime:parseInt(p[3])||0}; });
@@ -703,7 +706,7 @@
                 fi
             `;
             const res = await ksu.exec(sh);
-            const out = String(res.stdout || res).trim();
+            const out = extractStdout(res);
             
             const desc = document.getElementById('kb-status-desc');
             const badge = document.getElementById('kb-badge');
@@ -809,7 +812,7 @@
         let percent = 10;
         let kbTimer = setInterval(async () => {
             let res = await ksu.exec(`cat ${STATUS_FILE} 2>/dev/null`);
-            let out = String(res.stdout || res).trim();
+            let out = extractStdout(res);
             
             if (out.startsWith('STATUS:')) {
                 let parts = out.substring(7).split('|');

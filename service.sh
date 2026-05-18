@@ -52,7 +52,7 @@ MODDIR="${0%/*}"
 ) &
 
 # ==================================================
-# 守护核心 3：ZIP 模块自动归类引擎
+# 守护核心 3：ZIP 模块自动归类引擎 (修复带空格路径)
 # ==================================================
 (
     TARGET_DIR="/storage/emulated/0/Download/模块"
@@ -71,9 +71,12 @@ MODDIR="${0%/*}"
     mkdir -p "$TARGET_DIR"; STATE_DIR="/dev/automove_states"; mkdir -p "$STATE_DIR"
 
     while true; do
-        for dir in $WATCH_DIRS; do
-            dir=$(echo "$dir" | tr -d '\r')
+        # 核心修复：使用 echo | while read -r 按行读取，彻底解决目录带空格(如Telegram Files)被截断的问题
+        echo "$WATCH_DIRS" | while read -r dir; do
+            # 过滤头尾不可见字符与多余空格
+            dir=$(echo "$dir" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             [ -z "$dir" ] || [ ! -d "$dir" ] && continue
+            
             state_file="$STATE_DIR/$(echo "$dir" | tr '/' '_')"
             cur_time=$(stat -c %Y "$dir" 2>/dev/null)
             last_time=$(cat "$state_file" 2>/dev/null)
